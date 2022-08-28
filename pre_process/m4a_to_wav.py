@@ -10,10 +10,11 @@ from pydub import AudioSegment
 
 def Sub_process(q):
     while True:
-        end, origin_path, target_path, br = q.get()
+        end, origin_path, target_path, sr = q.get()
         if not end:
-            audio = AudioSegment.from_file(origin_path)
-            audio.export(target_path, format='wav', bitrate=br)
+            audio = AudioSegment.from_file(file=origin_path)
+            audio.frame_rate = sr
+            audio.export(target_path, format='wav')
         else:
             break
 
@@ -26,13 +27,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--dir", required=True, help="root dir of vox dataset")
     parser.add_argument("-t", "--target", required=True, help="dir of converted dataset")
-    parser.add_argument("-br", "--bitrate", help="sample rate", default=16000)
+    parser.add_argument("--sr", help="sample rate", default=22050)
     parser.add_argument("-p", "--process", help="Num of processes", default=4)
 
     args = vars(parser.parse_args())
     dir = args["dir"]
     target = args["target"]
-    br = args["bitrate"]
+    sr = args["sr"]
     process = int(args["process"])
 
     os.mkdir(target)
@@ -56,7 +57,7 @@ if __name__ == "__main__":
                 if not os.path.exists(target+info["speaker_id"]):
                     os.mkdir(target+info["speaker_id"])
 
-                q.put((False, join(path, file_name), join(target,info["speaker_id"]+"\\"+info["utterance"]), br))
+                q.put((False, join(path, file_name), join(target,info["speaker_id"]+"\\"+info["utterance"]), sr))
                 
                 info_list.append(info)
 

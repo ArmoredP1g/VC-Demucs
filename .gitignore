@@ -1,3 +1,6 @@
 /DVector
 /Notebooks
 /.vscode
+/hifi-gan
+/hifigan16k
+*.pyc

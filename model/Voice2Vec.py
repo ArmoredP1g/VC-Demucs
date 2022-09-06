@@ -47,24 +47,28 @@ class Voice2Vec(nn.Module):
     def __init__(self):
         super().__init__()
 
-        self.softmax = nn.Softmax(dim=2)
+        self.soft = nn.Softmax(dim=2)
         self.RConv = nn.Sequential(
                         _Res1D_convsizefixed_v1(80, 128, 5),
-                        nn.LeakyReLU(0.1),
+                        nn.ELU(),
+                        nn.MaxPool1d(2,2),
                         _Res1D_convsizefixed_v1(128,256, 5),
-                        nn.LeakyReLU(0.1),
+                        nn.ELU(),
+                        nn.MaxPool1d(2,2),
                         _Res1D_convsizefixed_v1(256,512, 5),
-                        nn.LeakyReLU(0.05),
+                        nn.ELU(),
+                        nn.MaxPool1d(2,2),
                         )
 
         self.naive_attn = nn.Sequential(
                             nn.Linear(512, 128),
-                            nn.LeakyReLU(0.1),
+                            nn.ELU(),
                             nn.Linear(128, 128),
-                            nn.LeakyReLU(0.1),
+                            nn.ELU(),
                             nn.Linear(128, 32),
-                            nn.LeakyReLU(0.1),
+                            nn.ELU(),
                             nn.Linear(32, 1),
+                            nn.ELU(),
                         )
 
     def weight_init(self):
@@ -79,7 +83,7 @@ class Voice2Vec(nn.Module):
         b, d, l = emb.shape
         emb_ = emb.permute(0,2,1).reshape(b*l, d)
         weight = self.naive_attn(emb_).view(b, l, 1).permute(0,2,1)
-        weight = self.softmax(weight)
+        weight = self.soft(weight)
         emb = emb * weight
         return F.normalize(emb.sum(2), p=2, dim=1) # normalize vec
 
@@ -88,7 +92,7 @@ class Voice2Vec(nn.Module):
         b, d, l = emb.shape
         emb_ = emb.permute(0,2,1).reshape(b*l, d)
         weight = self.naive_attn(emb_).view(b, l, 1).permute(0,2,1)
-        weight = self.softmax(weight)
+        weight = self.soft(weight)
         emb = emb * weight
         return F.normalize(emb.sum(2), p=2, dim=1), weight # normalize vec
 
@@ -119,7 +123,10 @@ def simplified_ge2e_loss(x):
         # for the different speaker should be decreased
         mat_right = centers.unsqueeze(0)
         dot2 = (mat_left * mat_right).sum(dim=2)
-        dot2 *= torch.triu(torch.ones(uttr,uttr), diagonal=1).to(device)  # mask
+
+        mask_r = torch.ones(uttr,uttr).to(device)
+        mask_r[:,i] = 0
+        dot2 *= mask_r  # mask
         cross_loss += dot2.sum()
 
-    return center_loss + cross_loss
+    return center_loss + 4*cross_loss

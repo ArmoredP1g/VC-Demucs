@@ -3,4 +3,6 @@
 /.vscode
 /hifi-gan
 /hifigan16k
+/runs
+/ckpt
 *.pyc

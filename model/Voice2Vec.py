@@ -49,13 +49,16 @@ class Voice2Vec(nn.Module):
 
         self.soft = nn.Softmax(dim=2)
         self.RConv = nn.Sequential(
-                        _Res1D_convsizefixed_v1(80, 128, 5),
+                        _Res1D_convsizefixed_v1(80, 160, 5),
                         nn.ELU(),
                         nn.MaxPool1d(2,2),
-                        _Res1D_convsizefixed_v1(128,256, 5),
+                        _Res1D_convsizefixed_v1(160,320, 5),
                         nn.ELU(),
                         nn.MaxPool1d(2,2),
-                        _Res1D_convsizefixed_v1(256,512, 5),
+                        _Res1D_convsizefixed_v1(320,400, 5),
+                        nn.ELU(),
+                        nn.MaxPool1d(2,2),
+                        _Res1D_convsizefixed_v1(400,512, 5),
                         nn.ELU(),
                         nn.MaxPool1d(2,2),
                         )
@@ -65,10 +68,7 @@ class Voice2Vec(nn.Module):
                             nn.ELU(),
                             nn.Linear(128, 128),
                             nn.ELU(),
-                            nn.Linear(128, 32),
-                            nn.ELU(),
-                            nn.Linear(32, 1),
-                            nn.ELU(),
+                            nn.Linear(128, 1)
                         )
 
     def weight_init(self):
@@ -97,6 +97,10 @@ class Voice2Vec(nn.Module):
         return F.normalize(emb.sum(2), p=2, dim=1), weight # normalize vec
 
 
+def loss_multiplier(x):
+    return 0.01-torch.log(-(0.5*x-0.51))
+
+
 def simplified_ge2e_loss(x):
     '''
     a simplified version of ge2e_loss
@@ -107,26 +111,22 @@ def simplified_ge2e_loss(x):
 
     # 求每个speaker 的 center
     centers = x.sum(dim=1) / uttr
-
-    center_loss = torch.tensor(0.).to(device)
     cross_loss = torch.tensor(0.).to(device)
+    center_loss = torch.tensor(0.).to(device)
+
     for i in range(spk):
         uttr_emb = x[i] # uttr * 512
         # for the same speaker, the similarity of embedding vectors 
         # should be increased as much as possible
-        mat_left = uttr_emb.unsqueeze(1)    # uttr * 1 * 512
-        mat_right = uttr_emb.unsqueeze(0)   # 1 * uttr * 512
-        dot1 = (mat_left * mat_right).sum(dim=2)
-        dot1 *= torch.triu(torch.ones(uttr,uttr), diagonal=1).to(device)  # mask
-        center_loss += -1 * dot1.sum()
-
         # for the different speaker should be decreased
-        mat_right = centers.unsqueeze(0)
-        dot2 = (mat_left * mat_right).sum(dim=2)
+        mat_left = uttr_emb.unsqueeze(1)    # uttr * 1 * 512
+        mat_right = centers.unsqueeze(0)    # 1 * uttr * 512
+        dot = (mat_left * mat_right).sum(dim=2)
 
-        mask_r = torch.ones(uttr,uttr).to(device)
-        mask_r[:,i] = 0
-        dot2 *= mask_r  # mask
-        cross_loss += dot2.sum()
+        # mask_r = torch.zeros(uttr,uttr).to(device)
+        # mask_r[:,i] = -1
+        center_loss += (loss_multiplier(-1*dot[:,i])).sum()
+        dot [:,i] = -1
+        cross_loss += loss_multiplier(dot.max(dim=0)[0]).sum()
 
-    return center_loss + 4*cross_loss
+    return center_loss, cross_loss

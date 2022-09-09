@@ -14,10 +14,10 @@ if __name__ == "__main__":
     import os
 
     # args
-    ckpt_path = ""
+    ckpt_path = "ckpt/multiplier8_25000"
     use_tensorboard = True
     tensorboard_path = ""
-    tag = "no_weight_init"
+    tag = "multiplier8"
     dataset_path = "E:/vox2_converted"
     batch_size = 4
     num_worker = 8
@@ -36,7 +36,7 @@ if __name__ == "__main__":
 
     if ckpt_path != "":
         # 读取 ckpt
-        v2v_model.load_state_dict(torch.load(ckpt_path + "/v2v.pt"))
+        v2v_model.load_state_dict(torch.load(ckpt_path + "/state_dict.pt"))
         # 读取训练参数
         f = open(ckpt_path + '/arc.json', 'r')
         content = f.read()
@@ -76,21 +76,27 @@ if __name__ == "__main__":
             # with autocast():
             output = v2v_model(data.reshape(spk*uttr, mel, l).to(device))
             output = output.view(spk, uttr, 512)
-            loss = simplified_ge2e_loss(output)
+            center_loss, cross_loss = simplified_ge2e_loss(output)
+            loss = center_loss + cross_loss
 
             loss.backward()
             optimizer.step()
 
             total_loss += loss.item()
 
+            if total_step%50 == 0:
+                print("center_loss: {} ,cross_loss: {}".format(center_loss, cross_loss))
+
             if total_step%loss_log_interval == 0:
-                print("total step: {},  loss: {}".format(total_step, loss/loss_log_interval))
+                # print("total step: {},  loss: {}".format(total_step, total_loss/loss_log_interval))
 
                 if use_tensorboard:
                     sum_writer.add_scalar(tag='Loss',
-                                            scalar_value=loss/loss_log_interval,
+                                            scalar_value=total_loss/loss_log_interval,
                                             global_step=total_step
                                         )
+                
+                total_loss = 0
 
             if total_step%ckpt_save_interval == 0:
                 p = "./ckpt/{}_{}".format(tag, total_step)

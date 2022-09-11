@@ -2,6 +2,7 @@ from configs import mel_cfg
 from configs import training_cfg
 from torch.utils.data.dataset import Dataset
 from torch.nn.utils.rnn import pad_sequence
+from random import randint
 import torchaudio
 import pandas as pd
 from torchaudio.functional import resample
@@ -12,13 +13,14 @@ class MultiUtteranceData(Dataset):
     '''
         dataloader for training voice2vec
     '''
-    def __init__(self, sample_rate, data_path, uttr_num):
+    def __init__(self, sample_rate, data_path, uttr_num, clip_size):
         super().__init__()
         self.path = data_path
         self.sample_rate = sample_rate
         self.data = pd.read_csv(data_path + "\\utterance_info.csv")
         self.speakers = self.data.speaker_id.unique()
         self.uttr_num = uttr_num
+        self.clip_size = clip_size
         self.log_mel_spec = LogMelSpectrogram(
                                 sample_rate,
                                 1024,
@@ -38,8 +40,14 @@ class MultiUtteranceData(Dataset):
             # if sample rate doesnt match, resample it
             if sr != self.sample_rate:
                 wav_tensor = resample(wav_tensor, sr, self.sample_rate)
-            
             _, logmel = self.log_mel_spec(wav_tensor)   # b(1),mel,lenth
+
+            # taking 3s clips
+            if logmel.shape[2] > self.clip_size:
+                upper_idx = logmel.shape[2] - (logmel.shape[2]%self.clip_size) - 1
+                random_idx = randint(0,upper_idx)
+                logmel = logmel[:,:,random_idx:random_idx+self.clip_size]
+
             mel_list.append(logmel[0].T)
         
         # return pad_sequence(mel_list, batch_first=True).permute(0,2,1)
@@ -57,4 +65,4 @@ def batch_padding(data):
         # d: [uttr_num, lenth, mel_num]
         l.append(d.permute(1,0,2))
 
-    return pad_sequence(l, batch_first=True).permute(0,2,3,1)    # [b,len,uttr,mel] ----> [b,uttr,mel,len]
+    return pad_sequence(l, batch_first=True).permute(0,2,1,3)    # [b,len,uttr,mel] ----> [b,uttr,mel,len]

@@ -1,12 +1,13 @@
 
 
+
 if __name__ == "__main__":
     import json
     import shutil
     from torch.utils.tensorboard import SummaryWriter
     from dataloaders.dataloaders import MultiUtteranceData, batch_padding
     from torch.utils.data import DataLoader
-    from model.Voice2Vec import Voice2Vec, simplified_ge2e_loss
+    from model.Voice2Vec import Voice2Vec_abandoned, simplified_ge2e_loss
     from torch.optim import Adam
     import torch
     from torch.cuda.amp import autocast as autocast
@@ -14,13 +15,13 @@ if __name__ == "__main__":
     import os
 
     # args
-    ckpt_path = "ckpt/multiplier8_25000"
+    ckpt_path = "./ckpt/avgpool_10000"
     use_tensorboard = True
     tensorboard_path = ""
-    tag = "multiplier8"
-    dataset_path = "E:/vox2_converted"
-    batch_size = 4
-    num_worker = 8
+    tag = "avgpool"
+    dataset_path = "D:/vox2_converted"
+    batch_size = 8
+    num_worker = 11
     loss_log_interval = 200
     ckpt_save_interval = 5000
 
@@ -29,10 +30,10 @@ if __name__ == "__main__":
     total_loss = 0
 
     sum_writer = None
-    dataset = MultiUtteranceData(22050, dataset_path, batch_size)
+    dataset = MultiUtteranceData(22050, dataset_path, batch_size, 300)
     dataloader = DataLoader(dataset, shuffle=True, batch_size=batch_size, num_workers=num_worker, drop_last=True, collate_fn=batch_padding)
 
-    v2v_model = Voice2Vec().to("cuda")
+    v2v_model = Voice2Vec_abandoned().to("cuda")
 
     if ckpt_path != "":
         # 读取 ckpt
@@ -69,6 +70,7 @@ if __name__ == "__main__":
     while True:
         for index,data in enumerate(dataloader, 0):
             total_step += 1
+            # print(total_step)
             optimizer.zero_grad()
 
             spk, uttr, mel, l = data.shape

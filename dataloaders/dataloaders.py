@@ -65,4 +65,4 @@ def batch_padding(data):
         # d: [uttr_num, lenth, mel_num]
         l.append(d.permute(1,0,2))
 
-    return pad_sequence(l, batch_first=True).permute(0,2,1,3)    # [b,len,uttr,mel] ----> [b,uttr,mel,len]
+    return pad_sequence(l, batch_first=True).permute(0,2,3,1)    # [b,len,uttr,mel] ----> [b,uttr,mel,len]

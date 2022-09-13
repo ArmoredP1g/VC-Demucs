@@ -45,29 +45,26 @@ class _Res1D_convsizefixed_v1(nn.Module):
 
 class Voice2Vec_abandoned(nn.Module):
     '''
-    该结构已弃用
-    结果远远不如用LSTM效果好...
+    @todo 尝试用lstm代替 naive_attn测试效果
     '''
     def __init__(self):
         super().__init__()
 
         self.soft = nn.Softmax(dim=2)
         self.RConv = nn.Sequential(
-                        _Res1D_convsizefixed_v1(80, 128, 5),
+                        _Res1D_convsizefixed_v1(80, 160, 5),
                         nn.ELU(),
                         nn.AvgPool1d(2,2),
-                        _Res1D_convsizefixed_v1(128,256, 5),
+                        _Res1D_convsizefixed_v1(160,320, 5),
                         nn.ELU(),
                         nn.AvgPool1d(2,2),
-                        _Res1D_convsizefixed_v1(256,384, 5),
+                        _Res1D_convsizefixed_v1(320,400, 5),
                         nn.ELU(),
                         nn.AvgPool1d(2,2),
-                        _Res1D_convsizefixed_v1(384,512, 5),
+                        _Res1D_convsizefixed_v1(400,512, 5),
                         nn.ELU(),
                         nn.AvgPool1d(2,2),
                         )
-
-        # self.lstm = nn.LSTM(input_size=512, hidden_size=512, batch_first=True)
 
         self.naive_attn = nn.Sequential(
                             nn.Linear(512, 128),
@@ -85,7 +82,6 @@ class Voice2Vec_abandoned(nn.Module):
         input: spk*uttr, mel_num, lenth
         return: spk*uttr * 512
         '''
-        mel = mel.permute(0,2,1)
         emb = self.RConv(mel)
         b, d, l = emb.shape
         emb_ = emb.permute(0,2,1).reshape(b*l, d)
@@ -94,37 +90,14 @@ class Voice2Vec_abandoned(nn.Module):
         emb = emb * weight
         return F.normalize(emb.sum(2), p=2, dim=1) # normalize vec
 
-    # def test(self, mel):
-    #     emb = self.RConv(mel)
-    #     b, d, l = emb.shape
-    #     emb_ = emb.permute(0,2,1).reshape(b*l, d)
-    #     weight = self.naive_attn(emb_).view(b, l, 1).permute(0,2,1)
-    #     weight = self.soft(weight)
-    #     emb = emb * weight
-    #     return F.normalize(emb.sum(2), p=2, dim=1), weight # normalize vec
-
-class Voice2Vec(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.lstm_1 = nn.LSTM(input_size=80, hidden_size=128, batch_first=True)
-        self.lstm_2 = nn.LSTM(input_size=128, hidden_size=256, batch_first=True)
-        self.lstm_3 = nn.LSTM(input_size=256, hidden_size=512, batch_first=True)
-    
-    def weight_init(self):
-        pass
-    
-    def forward(self, mel):
-        '''
-        input: spk*uttr, lenth, mel_num
-        return: spk*uttr * 512
-        '''
-        output, (h, c) = self.lstm_1(mel)
-        output, (h, c) = self.lstm_2(output)
-        output, (h, c) = self.lstm_3(output)
-        h = h[0]
-
-        return F.normalize(h, p=2, dim=1) # normalize vec
-
+    def test(self, mel):
+        emb = self.RConv(mel)
+        b, d, l = emb.shape
+        emb_ = emb.permute(0,2,1).reshape(b*l, d)
+        weight = self.naive_attn(emb_).view(b, l, 1).permute(0,2,1)
+        weight = self.soft(weight)
+        emb = emb * weight
+        return F.normalize(emb.sum(2), p=2, dim=1), weight # normalize vec
 
 def loss_multiplier(x):
     return 0.31666+0.51-torch.log(-(0.5*x-0.51))
@@ -140,7 +113,7 @@ def simplified_ge2e_loss(x):
     # 这里应该判断下spk uttr必须相等，但没必要
 
     # 求每个speaker 的 center
-    centers = x.sum(dim=1) / uttr
+    centers = F.normalize(x.mean(dim=1), p=2, dim=1) # this need to renormalized
     cross_loss = torch.tensor(0.).to(device)
     center_loss = torch.tensor(0.).to(device)
 

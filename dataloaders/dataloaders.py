@@ -9,7 +9,7 @@ from torchaudio.functional import resample
 from model.wav2mel import LogMelSpectrogram
 
 
-class MultiUtteranceData(Dataset):
+class MultiUtteranceData_mel(Dataset):
     '''
         dataloader for training voice2vec
     '''
@@ -54,7 +54,45 @@ class MultiUtteranceData(Dataset):
         return pad_sequence(mel_list, batch_first=True)  # Permute is not needed here, but in batch_padding
                                                          # return: uttr_num, lenth, mel_num
 
+    def __len__(self):
+        return self.speakers.__len__()
 
+
+class MultiUtteranceData_raw(Dataset):
+    '''
+        dataloader for training voice2vec
+    '''
+    def __init__(self, sample_rate, data_path, uttr_num, clip_size):
+        super().__init__()
+        self.path = data_path
+        self.sample_rate = sample_rate
+        self.data = pd.read_csv(data_path + "\\utterance_info.csv")
+        self.speakers = self.data.speaker_id.unique()
+        self.uttr_num = uttr_num
+        self.clip_size = clip_size
+
+    def __getitem__(self, index):
+        # Pick audio randomly, and padding all these to the longest one.
+        wav_files = self.data[self.data['speaker_id'] == self.speakers[index]].sample(self.uttr_num, replace=True)["utterance"].to_list()
+        wave_list = []
+        for path in wav_files:
+            pth = self.path + '/' + self.speakers[index] + path
+            wav_tensor, sr = torchaudio.load(pth)
+
+            # if sample rate doesnt match, resample it
+            if sr != self.sample_rate:
+                wav_tensor = resample(wav_tensor, sr, self.sample_rate)
+
+            # taking 3s clips
+            if wav_tensor.shape[1] > self.clip_size:
+                upper_idx = wav_tensor.shape[1] - (wav_tensor.shape[1]%self.clip_size) - 1
+                random_idx = randint(0,upper_idx)
+                wav_tensor = wav_tensor[:,random_idx:random_idx+self.clip_size]
+
+            wave_list.append(wav_tensor[0])
+        
+        return pad_sequence(wave_list, batch_first=True)  # return: uttr_num, lenth
+        
     def __len__(self):
         return self.speakers.__len__()
 

@@ -34,11 +34,19 @@ class Voice2Vec(nn.Module):
         self.attn_flag = attn
         self.soft = nn.Softmax(dim=2)
         self.WaveNet = WaveNet(input_size=80,
-                                out_size=128,
+                                out_size=80,
                                 residual_size=64,
-                                skip_size=128,
+                                skip_size=60,
                                 blocks=2,
                                 dilation_depth=5)
+
+        self.conv = nn.Sequential(
+                            nn.AvgPool1d(2,2),
+                            nn.Conv1d(80,100,5,1,2),
+                            nn.ELU(),
+                            nn.AvgPool1d(2,2),
+                            nn.Conv1d(100,128,5,1,2)
+                        )
 
         self.naive_attn = nn.Sequential(
                             nn.Linear(128, 64, bias=False),
@@ -55,6 +63,7 @@ class Voice2Vec(nn.Module):
         return: spk*uttr * 128
         '''
         emb = self.WaveNet(mel)
+        emb = self.conv(emb)
         b, d, l = emb.shape
         emb_ = emb.permute(0,2,1).reshape(b*l, d)
         weight = self.naive_attn(emb_).view(b, l, 1).permute(0,2,1)

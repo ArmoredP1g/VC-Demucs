@@ -24,8 +24,8 @@ class MultiUtteranceData_mel(Dataset):
         self.log_mel_spec = LogMelSpectrogram(
                                 sample_rate,
                                 1024,
-                                1024,
-                                256,
+                                186*4,
+                                186,
                                 80
                             )
 

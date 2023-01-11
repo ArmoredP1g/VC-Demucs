@@ -67,9 +67,11 @@ class WaveNet(nn.Module):
     def __init__(self,input_size,out_size, residual_size, skip_size, blocks, dilation_depth):
         '''
         args:
-            input_size: input_channels,
-            out_size: output_channels,
-            residual_size: hidden_size for residual
+            @input_size: input_channels,
+            @out_size: output_channels,
+            @residual_size: hidden_size for residual,
+            @skip_size: ..,
+            @dilation_depth: 
         '''
         super(WaveNet, self).__init__()
         self.input_conv = CausalConv1d(input_size,residual_size, kernel_size=2)        
@@ -97,5 +99,54 @@ class WaveNet(nn.Module):
         out = self.convout_1(out) # [batch,out_size,seq_len]
         out = F.relu(out)
 
+        out=self.convout_2(out)
+        return out     
+
+
+class Conditional_WaveNet(nn.Module):
+    def __init__(self,input_size,out_size, residual_size, skip_size, blocks, dilation_depth):
+        '''
+        apply ADAIN on every skip output
+        args:
+            @input_size: input_channels,
+            @out_size: output_channels,
+            @residual_size: hidden_size for residual,
+            @skip_size: ..,
+            @dilation_depth: 
+        '''
+        super(Conditional_WaveNet, self).__init__()
+        self.input_conv = CausalConv1d(input_size,residual_size, kernel_size=2)        
+        self.dilated_stacks = nn.ModuleList(
+            [DilatedStack(residual_size, skip_size, dilation_depth)
+             for cycle in range(blocks)]
+        )
+
+        self.convout_1 = nn.Conv1d(skip_size, out_size, kernel_size=1)
+        self.convout_2 = nn.Conv1d(out_size, out_size, kernel_size=1)
+
+        self.IN_input = nn.InstanceNorm1d(residual_size, track_running_stats=True)
+        self.IN_skip = nn.ModuleList(
+            [nn.InstanceNorm1d(skip_size, track_running_stats=True)
+             for cycle in range(blocks)]
+        )
+
+    def forward(self, x, condition_gamma, condition_beta):
+        x = self.input_conv(x) # [batch, residual_size, seq_len]      
+        skip_connections = []
+        for cycle in range(self.dilated_stacks.__len__()):
+            skips, x = self.dilated_stacks[cycle](x)    # skip: dilation_depth, batch, dim, len
+            skips = self.IN_skip[cycle](skips.mean(dim=0))              # remove speaker feature
+            if condition_beta != None and condition_gamma != None:
+                skips = (skips.permute(2,0,1)*condition_gamma + condition_beta).permute(1,2,0)  # introduce speaker condition
+                # else do in only
+            skip_connections.append(skips.unsqueeze(0))
+
+        ## skip_connection=[total_layers,batch,skip_size,seq_len]
+        skip_connections = torch.cat(skip_connections, dim=0)        
+        # gather all output skip connections to generate output, discard last residual output
+        out = skip_connections.mean(dim=0) # [batch,skip_size,seq_len]
+        out = F.relu(out)
+        out = self.convout_1(out) # [batch,out_size,seq_len]
+        out = F.relu(out)
         out=self.convout_2(out)
         return out     

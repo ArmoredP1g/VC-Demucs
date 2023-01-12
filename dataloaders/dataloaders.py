@@ -1,5 +1,4 @@
-from configs import mel_cfg
-from configs import training_cfg
+from configs.training_cfg import mel_cfg
 from torch.utils.data.dataset import Dataset
 from torch.nn.utils.rnn import pad_sequence
 from random import randint
@@ -20,13 +19,7 @@ class UtteranceData_mel(Dataset):
         self.data = pd.read_csv(data_path + "\\utterance_info.csv")
         self.speakers = self.data.speaker_id.unique()
         self.clip_size = clip_size
-        self.log_mel_spec = LogMelSpectrogram(
-                                sample_rate,
-                                1024,
-                                186*4,
-                                186,
-                                80
-                            )
+        self.log_mel_spec = LogMelSpectrogram()
 
     def __getitem__(self, index):
         # Pick audio randomly, and padding all these to the longest one.
@@ -34,7 +27,7 @@ class UtteranceData_mel(Dataset):
         mel_list = []
 
         pth = self.path + '/' + self.speakers[index] + wav_file
-        wav_tensor, sr = torchaudio.load(pth)
+        wav_tensor, sr = torchaudio.load(pth, normalize=True)
 
         # if sample rate doesnt match, resample it
         if sr != self.sample_rate:
@@ -64,13 +57,7 @@ class MultiUtteranceData_mel(Dataset):
         self.speakers = self.data.speaker_id.unique()
         self.uttr_num = uttr_num
         self.clip_size = clip_size
-        self.log_mel_spec = LogMelSpectrogram(
-                                sample_rate,
-                                1024,
-                                186*4,
-                                186,
-                                80
-                            )
+        self.log_mel_spec = LogMelSpectrogram()
 
     def __getitem__(self, index):
         # Pick audio randomly, and padding all these to the longest one.

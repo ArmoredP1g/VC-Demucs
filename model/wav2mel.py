@@ -11,27 +11,31 @@ def process_wav(in_path, out_path, sample_rate):
     return out_path, wav.size(-1) / sample_rate
 
 class LogMelSpectrogram(torch.nn.Module):
-    def __init__(self,
-        sr,
-        n_fft,
-        win_size,
-        hop_size,
-        num_mels
-    ):
+    def __init__(self, **kwargs):
+
+        self.args = {
+            'sample_rate': 22050,
+            'n_fft':2048,              #  creates n_fft // 2 + 1 bins.
+            'win_length':1024,         #  default = n_fft
+            'hop_length':512,         #  default = win_length // 2
+            'n_mels':256,
+            'normalized':False,
+            'norm':'slaney',
+            'mel_scale':'slaney'      # librosa mel_to_audio
+        }
+
+        self.args.update(kwargs)
+
         super().__init__()
         self.melspctrogram = transforms.MelSpectrogram(
-            sample_rate=sr,
-            n_fft=n_fft,
-            win_length=win_size,
-            hop_length=hop_size,
-            center=False,   # 啥
-            power=1.0,
-            norm="slaney",  # 啥
-            onesided=True,  # 啥
-            n_mels=num_mels,
-            mel_scale="slaney", # 啥
-            f_min=0,
-            f_max=8000,
+                sample_rate=self.args['sample_rate'],
+                n_fft=self.args['n_fft'],              #  creates n_fft // 2 + 1 bins.
+                win_length=self.args['win_length'],         #  default = n_fft
+                hop_length=self.args['hop_length'],         #  default = win_length // 2
+                n_mels=self.args['n_mels'],
+                normalized=self.args['normalized'],
+                norm=self.args['norm'],
+                mel_scale=self.args['mel_scale']      # librosa mel_to_audio
         )
 
     def forward(self, wav):

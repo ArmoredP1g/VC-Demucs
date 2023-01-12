@@ -149,4 +149,4 @@ class Conditional_WaveNet(nn.Module):
         out = self.convout_1(out) # [batch,out_size,seq_len]
         out = F.relu(out)
         out=self.convout_2(out)
-        return out     
+        return out    

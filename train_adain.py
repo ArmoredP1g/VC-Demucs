@@ -7,8 +7,12 @@ if __name__ == "__main__":
     from torch.nn.utils import clip_grad_norm_
     from model.VAE_VC import Content_Encoder, Speaker_Encoder, Reparameterize
     from model.WaveNet import Conditional_WaveNet
+    from model.wav2mel import LogMelSpectrogram
     from torch.optim import Adam
     import torch
+    import torchaudio
+    from torchaudio.functional import resample
+    from librosa.feature.inverse import mel_to_audio
     from torch.cuda.amp import autocast as autocast
     from configs.training_cfg import device, ce_args, se_args
     import os
@@ -17,15 +21,16 @@ if __name__ == "__main__":
     torch.autograd.set_detect_anomaly(True)
 
     # args
-    ckpt_path = ""
+    ckpt_path = "ckpt/adain_wavenet_15000"
     use_tensorboard = True
     tensorboard_path = ""
-    tag = "adain_wavenet2"
+    tag = "adain_wavenet"
     dataset_path = "D:/vox2_converted"
     batch_size = 16
     num_worker = 4
     loss_log_interval = 200
     ckpt_save_interval = 5000
+    demo_interval = 5000
 
 
     total_step = 0
@@ -37,7 +42,18 @@ if __name__ == "__main__":
 
     content_encoder = Content_Encoder(**ce_args).to("cuda")
     speaker_encoder = Speaker_Encoder(**se_args).to("cuda")
-    decoder = Conditional_WaveNet(128,80,96,128,3,7).to("cuda")
+    decoder = Conditional_WaveNet(128,256,196,128,3,7).to("cuda")
+
+    # 效果可视化
+    log_mel_spec = LogMelSpectrogram()
+    wav_content, sr1 = torchaudio.load("D:\\vox2_converted\\id00021\\00015.wav", normalize=True)
+    wav_timbre, sr2 = torchaudio.load("D:\\vox2_converted\\id00022\\00028.wav", normalize=True)
+    wav_content = resample(wav_content, sr1, 22050)
+    wav_timbre = resample(wav_timbre, sr2, 22050)
+    mel_content, _ = log_mel_spec(wav_content)
+    mel_timbre, _ = log_mel_spec(wav_timbre)
+    del wav_content
+    del wav_timbre
 
     if ckpt_path != "":
         # 读取 ckpt
@@ -83,7 +99,7 @@ if __name__ == "__main__":
             output_mel = decoder(content, gamma, beta)
             # output_mel = decoder(content, None, None)
 
-            reconstruction_loss = 10*l1_loss(output_mel, data)
+            reconstruction_loss = 10*l1_loss(output_mel.transpose(1,2), data.transpose(1,2))
             kl_loss = 0.01*(0.5 * torch.mean(torch.exp(logvar) + miu**2 - 1. - logvar))
             
             (reconstruction_loss + kl_loss).backward()
@@ -103,10 +119,24 @@ if __name__ == "__main__":
                                             scalar_value=total_loss/loss_log_interval,
                                             global_step=total_step
                                         )
-                
                 total_loss = 0
 
+            if total_step%demo_interval == 0:
+                if use_tensorboard:
+                    with torch.no_grad():
+                        g, b = speaker_encoder(mel_timbre.to(device))
+                        c, _ = content_encoder(mel_content.to(device))  #miu only
+                        o = torch.clamp(decoder(c, g, b), min=0)
+                        owav = mel_to_audio(o.cpu().numpy(), sr=22050, n_fft=2048, hop_length=512, win_length=1024, n_iter=500, norm='slaney')
+
+                        sum_writer.add_audio(tag='转换效果',
+                                            snd_tensor=owav,
+                                            global_step=total_step,
+                                            sample_rate=22050
+                                            )
+
             if total_step%ckpt_save_interval == 0:
+
                 p = "./ckpt/{}_{}".format(tag, total_step)
                 if not os.path.exists(p):
                     os.makedirs(p)

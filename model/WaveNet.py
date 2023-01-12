@@ -124,29 +124,32 @@ class Conditional_WaveNet(nn.Module):
         self.convout_1 = nn.Conv1d(skip_size, out_size, kernel_size=1)
         self.convout_2 = nn.Conv1d(out_size, out_size, kernel_size=1)
 
-        self.IN_input = nn.InstanceNorm1d(residual_size, track_running_stats=True)
-        self.IN_skip = nn.ModuleList(
-            [nn.InstanceNorm1d(skip_size, track_running_stats=True)
+        self.IN_input = nn.InstanceNorm1d(input_size, track_running_stats=True)
+        self.IN_res = nn.ModuleList(
+            [nn.InstanceNorm1d(residual_size, track_running_stats=True)
              for cycle in range(blocks)]
         )
 
     def forward(self, x, condition_gamma, condition_beta):
-        x = self.input_conv(x) # [batch, residual_size, seq_len]      
+        x = self.IN_input(x)
+        x = self.input_conv(x) # [batch,residual_size, seq_len]             
         skip_connections = []
         for cycle in range(self.dilated_stacks.__len__()):
-            skips, x = self.dilated_stacks[cycle](x)    # skip: dilation_depth, batch, dim, len
-            skips = self.IN_skip[cycle](skips.mean(dim=0))              # remove speaker feature
+            skips, x = self.dilated_stacks[cycle](x)            
+            x = self.IN_res[cycle](x)              # remove speaker feature
             if condition_beta != None and condition_gamma != None:
-                skips = (skips.permute(2,0,1)*condition_gamma + condition_beta).permute(1,2,0)  # introduce speaker condition
+                x = (x.permute(2,0,1)*condition_gamma + condition_beta).permute(1,2,0)  # introduce speaker condition
                 # else do in only
-            skip_connections.append(skips.unsqueeze(0))
+            skip_connections.append(skips)
 
         ## skip_connection=[total_layers,batch,skip_size,seq_len]
         skip_connections = torch.cat(skip_connections, dim=0)        
+
         # gather all output skip connections to generate output, discard last residual output
-        out = skip_connections.mean(dim=0) # [batch,skip_size,seq_len]
+        out = skip_connections.sum(dim=0) # [batch,skip_size,seq_len]
         out = F.relu(out)
         out = self.convout_1(out) # [batch,out_size,seq_len]
         out = F.relu(out)
+
         out=self.convout_2(out)
-        return out    
+        return out   

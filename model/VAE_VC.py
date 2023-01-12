@@ -17,8 +17,8 @@ class Res1D_convsizefixed(nn.Module):
         super().__init__()
         self.overlapTile = nn.ReflectionPad1d(convsize//2)  #对称填充
 
-        self.conv_1 = nn.Conv1d(in_channels,in_channels,convsize,1,bias=False)
-        self.conv_2 = nn.Conv1d(in_channels,out_channels,convsize,1,bias=False)
+        self.conv_1 = nn.Conv1d(in_channels,in_channels,convsize,1)
+        self.conv_2 = nn.Conv1d(in_channels,out_channels,convsize,1)
 
         # 1*1 conv
         if in_channels != out_channels:
@@ -39,6 +39,14 @@ class Res1D_convsizefixed(nn.Module):
             X = self.bottleneck_conv(x)
         
         return output + X
+
+# class ConvBank(nn.Module):
+#     def __init__(self) -> None:
+#         super().__init__(scale=3)
+        
+        
+#     def forward(self, x):
+#         pass
 
 class Content_Encoder(nn.Module):
     def __init__(self, **kwargs):
@@ -68,13 +76,10 @@ class Content_Encoder(nn.Module):
 
     def forward(self, x):
         x = torch.relu(self.wave_net(x, None, None))    # batch, embed, len
-        
         x = self.IN(x)
-
         miu = self.conv_miu(x)
         logvar = self.conv_logvar(x)
-
-        return miu, logvar
+        return miu, torch.clamp(logvar, max=10) #防止nan
 
 
 class Speaker_Encoder(nn.Module):

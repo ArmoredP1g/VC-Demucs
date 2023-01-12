@@ -21,10 +21,10 @@ if __name__ == "__main__":
     torch.autograd.set_detect_anomaly(True)
 
     # args
-    ckpt_path = "ckpt/adain_wavenet_15000"
+    ckpt_path = ""
     use_tensorboard = True
     tensorboard_path = ""
-    tag = "adain_wavenet"
+    tag = "adain_wavenet2"
     dataset_path = "D:/vox2_converted"
     batch_size = 16
     num_worker = 4
@@ -42,7 +42,7 @@ if __name__ == "__main__":
 
     content_encoder = Content_Encoder(**ce_args).to("cuda")
     speaker_encoder = Speaker_Encoder(**se_args).to("cuda")
-    decoder = Conditional_WaveNet(128,256,196,128,3,7).to("cuda")
+    decoder = Conditional_WaveNet(128,256,196,128,5,5).to("cuda")
 
     # 效果可视化
     log_mel_spec = LogMelSpectrogram()
@@ -76,7 +76,7 @@ if __name__ == "__main__":
         sum_writer = SummaryWriter(tensorboard_path+"/{}".format(tag))
 
     optimizer = Adam([
-                {'params': content_encoder.parameters(), 'lr': 0.001}, 
+                {'params': content_encoder.parameters(), 'lr': 0.0005}, 
                 {'params': speaker_encoder.parameters(), 'lr': 0.001},
                 {'params': decoder.parameters(), 'lr': 0.001}
             ])
@@ -96,16 +96,16 @@ if __name__ == "__main__":
             miu, logvar = content_encoder(data)
             content = Reparameterize(miu, logvar)
             gamma, beta = speaker_encoder(data)
-            output_mel = decoder(content, gamma, beta)
-            # output_mel = decoder(content, None, None)
+            # output_mel = decoder(content, gamma, beta)
+            output_mel = decoder(content, None, None)
 
             reconstruction_loss = 10*l1_loss(output_mel.transpose(1,2), data.transpose(1,2))
             kl_loss = 0.01*(0.5 * torch.mean(torch.exp(logvar) + miu**2 - 1. - logvar))
             
             (reconstruction_loss + kl_loss).backward()
-            # clip_grad_norm_(content_encoder.parameters(), 0.05)
-            # clip_grad_norm_(speaker_encoder.parameters(), 0.05)
-            # clip_grad_norm_(decoder.parameters(), 0.05)
+            clip_grad_norm_(content_encoder.parameters(), 5)
+            clip_grad_norm_(speaker_encoder.parameters(), 5)
+            clip_grad_norm_(decoder.parameters(), 5)
             optimizer.step()
 
             total_loss += (reconstruction_loss + kl_loss).item()

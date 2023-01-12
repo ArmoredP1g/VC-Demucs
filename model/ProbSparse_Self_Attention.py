@@ -132,7 +132,7 @@ class Self_Attention_Decoder(nn.Module):
         v = self.WV(x).reshape(b,l,h,self.args['qk_dim']) #  [b, l, head, qk_dim]
         qk = self.soft((self.quest_token * k).sum(dim=3)) / sqrt(self.args['qk_dim'])#  [b, l(softmax), head]
         # for visualizition
-        self.attn_map = qk.unsqueeze(1).cpu().detach().numpy()
+        # self.attn_map = qk.unsqueeze(1).cpu().detach().numpy()
 
         z = torch.einsum('blh,blhd->blhd', qk, v)   # [b, l, h, d]
         z = z.sum(dim=1).reshape(b, h*self.args['qk_dim']) #  [b, h*qkdim]

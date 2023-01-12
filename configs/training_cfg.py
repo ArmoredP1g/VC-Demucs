@@ -7,14 +7,14 @@ ce_args = {
     'residual_size': 196,
     'skip_size': 196,
     'blocks': 3,
-    'dilation_depth': 7
+    'dilation_depth': 6
 }
 
 # Speaker Encoder参数
 se_args = {
-    'convdim_change': [256, 224, 192, 192, 224, 256],
+    'convdim_change': [256, 264, 296, 328, 360, 392],
     'convsize_change': [5, 5, 5, 3, 3],
-    'embed_dim': 128,
+    'embed_dim': 196,
     'qk_dim': 192,
     'head': 4,
     'dim_feedforward': 224
